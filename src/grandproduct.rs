@@ -37,17 +37,6 @@ fn factor<F: PrimeField>(witness: &[F]) -> (Vec<F>, Vec<F>) {
     (l, r)
 }
 
-fn constrained_line<F: PrimeField + From<i32>>(witness: &[F], rs: &[F], points: usize) -> Vec<F> {
-    let mut rs = rs.to_vec();
-    let mut line = vec![];
-    for i in 0..points {
-        rs.push(F::from(i as u64));
-        line.push(eval_mle(&rs, &witness));
-        rs.pop();
-    }
-    line
-}
-
 fn prove<F: PrimeField + From<i32>>(
     witness: &[F],
     mut claim: F,

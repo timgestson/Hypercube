@@ -50,7 +50,16 @@ fn prove<F: PrimeField + From<i32>>(
     let mut sumcheck_proofs = vec![];
     let mut z = vec![];
     let mut rands = vec![];
-    for i in 0..layers.len() {
+
+    let challenge = transcript.challenge_scalar(b"grand_product_challenge");
+    rands.push(challenge);
+    claim = eval_ule(&[layers[0][0], layers[0][1]], challenge);
+    claims.push(claim);
+    left_evals.push(layers[0][0]);
+    right_evals.push(layers[0][1]);
+    z.push(challenge);
+
+    for i in 1..layers.len() {
         let layer = &layers[i];
         let eq: Vec<F> = chis(&z);
         let (l, r) = factor(layer);
@@ -85,9 +94,13 @@ fn verify<F: PrimeField + From<i32>>(
     assert_eq!(left_evals.len(), right_evals.len());
     assert_eq!(left_evals.len(), claims.len() - 1);
     let mut z = vec![];
-    for i in 0..claims.len() - 1 {
+    assert_eq!(claims[0], left_evals[0] * right_evals[0]);
+    let challenge = transcript.challenge_scalar(b"grand_product_challenge");
+    z.push(challenge);
+
+    for i in 1..claims.len() - 1 {
         let (rands, expected) =
-            linearsumcheck::verify(claims[i], sumcheck_proofs[i].clone(), 3, i, transcript);
+            linearsumcheck::verify(claims[i], sumcheck_proofs[i - 1].clone(), 3, i, transcript);
         transcript.append_scalar(b"grand_product_point", &left_evals[i]);
         transcript.append_scalar(b"grand_product_point", &right_evals[i]);
         let challenge = transcript.challenge_scalar(b"grand_product_challenge");

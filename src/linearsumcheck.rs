@@ -51,29 +51,23 @@ pub fn prove<F: PrimeField + From<i32>>(
     transcript.append_scalar(b"sumcheck_rounds", &F::from(rounds as u64));
     let mut rs = vec![F::ZERO; rounds];
     let mut last_claim = claim;
-    if rounds == 0 {
-        let points = vec![F::ZERO, claim];
-        transcript.append_points(b"sumcheck_points", &points);
-        (vec![points.clone()], rs)
-    } else {
+    let points = derive_points(&mles, last_claim);
+    transcript.append_points(b"sumcheck_points", &points);
+    let mut polys = vec![points];
+    for i in 1..rounds {
+        let r = transcript.challenge_scalar(b"sumcheck_challenge");
+        for j in 0..mles.len() {
+            mles[j] = set_variable(&mles[j], r);
+        }
+        last_claim = eval_ule(&polys[i - 1], r);
         let points = derive_points(&mles, last_claim);
         transcript.append_points(b"sumcheck_points", &points);
-        let mut polys = vec![points];
-        for i in 1..rounds {
-            let r = transcript.challenge_scalar(b"sumcheck_challenge");
-            for j in 0..mles.len() {
-                mles[j] = set_variable(&mles[j], r);
-            }
-            last_claim = eval_ule(&polys[i - 1], r);
-            let points = derive_points(&mles, last_claim);
-            transcript.append_points(b"sumcheck_points", &points);
-            polys.push(points);
-            rs[i - 1] = r;
-        }
-        let r = transcript.challenge_scalar(b"sumcheck_challenge");
-        rs[rounds - 1] = r;
-        (polys, rs)
+        polys.push(points);
+        rs[i - 1] = r;
     }
+    let r = transcript.challenge_scalar(b"sumcheck_challenge");
+    rs[rounds - 1] = r;
+    (polys, rs)
 }
 
 pub fn verify<F: PrimeField + From<i32>>(
@@ -88,16 +82,13 @@ pub fn verify<F: PrimeField + From<i32>>(
     transcript.append_scalar(b"sumcheck_degree", &F::from(degree as u64));
     transcript.append_scalar(b"sumcheck_rounds", &F::from(rounds as u64));
     transcript.append_points(b"sumcheck_points", &polynomials[0]);
-    assert_eq!(
-        claim,
-        eval_ule(&polynomials[0], F::ZERO) + eval_ule(&polynomials[0], F::ONE)
-    );
+    assert_eq!(claim, polynomials[0][0] + polynomials[0][1]);
     for i in 1..polynomials.len() {
         let r = transcript.challenge_scalar(b"sumcheck_challenge");
         assert_eq!(polynomials[i].len(), degree + 1);
         assert_eq!(
             eval_ule(&polynomials[i - 1], r),
-            eval_ule(&polynomials[i], F::ZERO) + eval_ule(&polynomials[i], F::ONE)
+            polynomials[i][0] + polynomials[i][1]
         );
         rs[i - 1] = r;
         transcript.append_points(b"sumcheck_points", &polynomials[i]);

@@ -1,7 +1,7 @@
 use ark_ff::{BigInteger, PrimeField};
 
 pub fn eval_ule<F: PrimeField + From<i32>>(points: &[F], r: F) -> F {
-    // TODO: Make this better
+    // Check if r is in interpolated set
     if F::ZERO <= r && r < F::from(points.len() as u64) {
         return points[usize::from_le_bytes(
             r.into_bigint().to_bytes_le()[0..8]

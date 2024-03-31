@@ -133,15 +133,3 @@ fn grandproduct_test() {
     let (final_claim, rands) = verify(&claims, &left, &right, &sc_proofs, &mut vtranscript);
     assert_eq!(final_claim, eval_mle(&rands, &v2));
 }
-
-/*
-// hypercube eval
-let y: F = (0..l.len().ilog2() as usize)
-    .map(|_| vec![F::from(0), F::from(1)])
-    .multi_cartesian_product()
-    .map(|a| {
-        eval_mle(&a, &eq) * eval_mle(&a, &r) * eval_mle(&a, &l)
-    }).sum();
-println!("hypercube eval: {}", y);
-// end hypercube eval
-*/

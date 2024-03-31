@@ -104,7 +104,7 @@ pub fn verify<F: PrimeField + From<i32>>(
 }
 
 #[test]
-fn sumcheck() {
+fn quadratic() {
     use ark_curve25519::Fr;
 
     let a = vec![
@@ -139,15 +139,12 @@ fn sumcheck() {
     let (vrs, expected_eval) = verify(claim, polys.clone(), 2, polys.len(), &mut verify_transcript);
 
     let rchis = chis(&vrs);
-    println!("{}", rchis.len());
-    println!("{}", rs.len());
     let final_eval: Fr = eval_chis(&rchis, &a) * eval_chis(&rchis, &b);
-    println!("{}", final_eval);
-    println!("{}", expected_eval);
+    assert_eq!(final_eval, expected_eval);
 }
 
 #[test]
-fn sc() {
+fn cubic() {
     use ark_curve25519::Fr;
     use itertools::izip;
 
@@ -183,19 +180,14 @@ fn sc() {
     ];
 
     let claim: Fr = izip!(&a, &b, &c).map(|(&a, &b, &c)| a * b * c).sum();
-    println!("{}", claim);
     let mles = vec![a.clone(), b.clone(), c.clone()];
-
     let mut transcript = Transcript::new(b"test_transcript");
-
-    let (polys, rs) = prove(claim, mles, &mut transcript);
+    let (polys, _rs) = prove(claim, mles, &mut transcript);
 
     let mut verify_transcript = Transcript::new(b"test_transcript");
     let (vrs, expected_eval) = verify(claim, polys.clone(), 3, polys.len(), &mut verify_transcript);
 
     let rchis = chis(&vrs);
-    println!("{}", rchis.len());
     let final_eval: Fr = eval_chis(&rchis, &a) * eval_chis(&rchis, &b) * eval_chis(&rchis, &c);
-    println!("{}", final_eval);
-    println!("{}", expected_eval);
+    assert_eq!(expected_eval, final_eval);
 }

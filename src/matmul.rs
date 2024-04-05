@@ -3,7 +3,10 @@ use itertools::Itertools;
 use merlin::Transcript;
 
 use crate::{
-    fiatshamir::ProtocolTranscript, multilinear::{chis, eval_chis, eval_mle}, sumcheck::{self, SumcheckProof}, univariate::eval_ule
+    fiatshamir::ProtocolTranscript,
+    multilinear::{chis, eval_chis, eval_mle},
+    sumcheck::{self, SumcheckProof},
+    univariate::eval_ule,
 };
 
 fn set_variable_first_half<F: PrimeField>(mle: &[F], r: F) -> Vec<F> {

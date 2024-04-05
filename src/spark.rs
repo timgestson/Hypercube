@@ -9,11 +9,11 @@ use merlin::Transcript;
 use crate::fiatshamir::ProtocolTranscript;
 use crate::grandproduct;
 use crate::grandproduct::GrandProductProof;
-use crate::sumcheck;
 use crate::multilinear::chis;
 use crate::multilinear::eval_chis;
 use crate::multilinear::eval_mle;
 use crate::multilinear::pad_next_power_of_two;
+use crate::sumcheck;
 use crate::sumcheck::SumcheckProof;
 use crate::univariate::eval_ule;
 
@@ -59,8 +59,8 @@ struct SparkProof<F: PrimeField + From<i32>> {
     read_rows: Vec<F>,
     read_cols: Vec<F>,
     counts_rows: Vec<F>,
-    counts_cols: Vec<F>, 
-    memory: usize
+    counts_cols: Vec<F>,
+    memory: usize,
 }
 
 impl<F: PrimeField + From<i32>> SparkProof<F> {
@@ -73,18 +73,17 @@ impl<F: PrimeField + From<i32>> SparkProof<F> {
     ) -> Self {
         let r = transcript.challenge_scalars(b"spark_challenge", memory.ilog2() as usize * 2);
         let (rx, ry) = r.split_at(memory.ilog2() as usize);
-        
+
         let chi_rx = chis(rx);
         let chi_ry = chis(ry);
 
-        let eq_rows: Vec<_> = (0..memory).map(|i| { 
-            eval_chis(&chi_rx, to_bits(F::from(i as u64), memory).as_ref())
-        }).collect();
+        let eq_rows: Vec<_> = (0..memory)
+            .map(|i| eval_chis(&chi_rx, to_bits(F::from(i as u64), memory).as_ref()))
+            .collect();
 
-        let eq_cols: Vec<_> = (0..memory).map(|i| { 
-            eval_chis(&chi_ry, to_bits(F::from(i as u64), memory).as_ref())
-        }).collect();
-
+        let eq_cols: Vec<_> = (0..memory)
+            .map(|i| eval_chis(&chi_ry, to_bits(F::from(i as u64), memory).as_ref()))
+            .collect();
 
         let e_rx: Vec<_> = rows
             .iter()
@@ -95,16 +94,17 @@ impl<F: PrimeField + From<i32>> SparkProof<F> {
             .map(|c| eval_chis(&chi_ry, to_bits(F::from(*c as u64), memory).as_slice()))
             .collect();
 
-        let claim: F = (0..vals.len())
-            .map(|i| {
-                vals[i] * e_rx[i] * e_ry[i]
-            }).sum();
-        let primary_sumcheck_proof = SumcheckProof::prove(claim, vec![vals.to_vec(), e_rx.clone(), e_ry.clone()], transcript);
+        let claim: F = (0..vals.len()).map(|i| vals[i] * e_rx[i] * e_ry[i]).sum();
+        let primary_sumcheck_proof = SumcheckProof::prove(
+            claim,
+            vec![vals.to_vec(), e_rx.clone(), e_ry.clone()],
+            transcript,
+        );
 
         let row_reads: Vec<_> = rows.to_vec().iter().map(|&i| F::from(i as u64)).collect();
         let mut row_final = vec![F::ZERO; memory];
         for &r in rows.iter() {
-            row_final[r] += F::ONE 
+            row_final[r] += F::ONE
         }
         let col_reads: Vec<_> = cols.to_vec().iter().map(|&i| F::from(i as u64)).collect();
         let mut col_final = vec![F::ZERO; memory];
@@ -114,25 +114,33 @@ impl<F: PrimeField + From<i32>> SparkProof<F> {
 
         let gamma = transcript.challenge_scalar(b"spark_gamma");
         let tau = transcript.challenge_scalar(b"spark_tau");
-        
+
         let fingerprint = |k: F, v: F, t: F| -> F { k * gamma.square() + v * gamma + t - tau };
-        
-        let mut r_products: Vec<_> = (0..memory).map(|i| {
-            let f = F::from(i as u64);
-            (f , eval_chis(&chi_rx, &to_bits(f, memory)), F::ZERO)
-        }).chain(
-            (0..rows.len()).map(|i| (F::from(rows[i] as u64), e_rx[i], row_reads[i]+ F::ONE))
-        ).map(|(a,b,c)| fingerprint(a,b,c)).collect();
+
+        let mut r_products: Vec<_> = (0..memory)
+            .map(|i| {
+                let f = F::from(i as u64);
+                (f, eval_chis(&chi_rx, &to_bits(f, memory)), F::ZERO)
+            })
+            .chain(
+                (0..rows.len()).map(|i| (F::from(rows[i] as u64), e_rx[i], row_reads[i] + F::ONE)),
+            )
+            .map(|(a, b, c)| fingerprint(a, b, c))
+            .collect();
         let r_claim = r_products.iter().fold(F::ONE, |a, &b| a * b);
         r_products = pad_next_power_of_two(&r_products);
         let row_proof = GrandProductProof::prove(&r_products, r_claim, transcript);
-        
-        let mut c_products: Vec<_> = (0..memory).map(|i| {
-            let f = F::from(i as u64);
-            (f , eval_chis(&chi_ry, &to_bits(f, memory)), F::ZERO)
-        }).chain(
-            (0..rows.len()).map(|i| (F::from(rows[i] as u64), e_ry[i], col_reads[i]+ F::ONE))
-        ).map(|(a,b,c)| fingerprint(a,b,c)).collect();
+
+        let mut c_products: Vec<_> = (0..memory)
+            .map(|i| {
+                let f = F::from(i as u64);
+                (f, eval_chis(&chi_ry, &to_bits(f, memory)), F::ZERO)
+            })
+            .chain(
+                (0..rows.len()).map(|i| (F::from(rows[i] as u64), e_ry[i], col_reads[i] + F::ONE)),
+            )
+            .map(|(a, b, c)| fingerprint(a, b, c))
+            .collect();
         let c_claim = c_products.iter().fold(F::ONE, |a, &b| a * b);
         c_products = pad_next_power_of_two(&c_products);
         let col_proof = GrandProductProof::prove(&c_products, c_claim, transcript);
@@ -148,25 +156,36 @@ impl<F: PrimeField + From<i32>> SparkProof<F> {
             read_cols: col_reads,
             counts_rows: row_final,
             counts_cols: col_final,
-            memory: memory
+            memory: memory,
         }
     }
 
     pub fn verify(&self, transcript: &mut impl ProtocolTranscript<F>) {
         let r = transcript.challenge_scalars(b"spark_challenge", self.memory.ilog2() as usize * 2);
         let (rx, ry) = r.split_at(self.memory.ilog2() as usize);
-        let (rz, eval)= self.primary_sumcheck_proof.verify(transcript);
-        assert_eq!(self.primary_sumcheck_proof.final_terms.iter().product::<F>(), eval);
-        assert_eq!(eval_mle(&rz, &self.vals), self.primary_sumcheck_proof.final_terms[0]);
-        assert_eq!(eval_mle(&rz, &self.e_rx), self.primary_sumcheck_proof.final_terms[1]);
-        assert_eq!(eval_mle(&rz, &self.e_ry), self.primary_sumcheck_proof.final_terms[2]);
-        
+        let (rz, eval) = self.primary_sumcheck_proof.verify(transcript);
+        assert_eq!(
+            self.primary_sumcheck_proof
+                .final_terms
+                .iter()
+                .product::<F>(),
+            eval
+        );
+        assert_eq!(
+            eval_mle(&rz, &self.vals),
+            self.primary_sumcheck_proof.final_terms[0]
+        );
+        assert_eq!(
+            eval_mle(&rz, &self.e_rx),
+            self.primary_sumcheck_proof.final_terms[1]
+        );
+        assert_eq!(
+            eval_mle(&rz, &self.e_ry),
+            self.primary_sumcheck_proof.final_terms[2]
+        );
+
         let gamma = transcript.challenge_scalar(b"spark_gamma");
         let tau = transcript.challenge_scalar(b"spark_tau");
-
-        
-
-
     }
 }
 
@@ -200,5 +219,4 @@ fn test_spark() {
     let proof = SparkProof::prove(&vals, &rows, &cols, matrix.len(), &mut transcript);
     let mut v_transcript = Transcript::new(b"test_transcript");
     proof.verify(&mut v_transcript);
-
 }

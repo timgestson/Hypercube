@@ -3,18 +3,9 @@ use merlin::Transcript;
 
 use crate::{
     fiatshamir::ProtocolTranscript,
-    multilinear::{chis, eval_chis},
+    multilinear::{chis, eval_chis, set_variable},
     univariate::eval_ule,
 };
-
-fn set_variable<F: PrimeField>(mle: &[F], r: F) -> Vec<F> {
-    let half = mle.len() / 2;
-    let (a, b) = mle.split_at(half);
-    a.iter()
-        .zip(b)
-        .map(|(&a, &b)| (F::ONE - r) * a + r * b)
-        .collect()
-}
 
 fn derive_points<F: PrimeField>(mles: &[Vec<F>], last_claim: F) -> Vec<F> {
     let degree = mles.len() + 1;

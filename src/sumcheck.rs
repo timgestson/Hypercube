@@ -38,11 +38,93 @@ fn derive_points<F: PrimeField>(mles: &[Vec<F>], last_claim: F) -> Vec<F> {
     points
 }
 
+pub struct SumcheckProof<F: PrimeField + From<i32>> {
+    polynomials: Vec<Vec<F>>,
+    rands: Vec<F>,
+    pub final_terms: Vec<F>,
+    degree: usize,
+    rounds: usize,
+    claim: F
+}
+
+impl<F: PrimeField + From<i32>> SumcheckProof<F> {
+    pub fn prove(
+        claim: F,
+        mut mles: Vec<Vec<F>>,
+        transcript: &mut impl ProtocolTranscript<F>,
+    ) -> Self {
+        transcript.append_scalar(b"sumcheck_claim", &claim);
+        let degree = mles.len();
+        transcript.append_scalar(b"sumcheck_degree", &F::from(degree as u64));
+        let mle_len = mles[0].len();
+        let rounds = mle_len.ilog2() as usize;
+        transcript.append_scalar(b"sumcheck_rounds", &F::from(rounds as u64));
+        let mut rs = vec![F::ZERO; rounds];
+        let mut last_claim = claim;
+        let points = derive_points(&mles, last_claim);
+        transcript.append_points(b"sumcheck_points", &points);
+        let mut polys = vec![points];
+        for i in 1..rounds {
+            let r = transcript.challenge_scalar(b"sumcheck_challenge");
+            for j in 0..mles.len() {
+                mles[j] = set_variable(&mles[j], r);
+            }
+            last_claim = eval_ule(&polys[i - 1], r);
+            let points = derive_points(&mles, last_claim);
+            transcript.append_points(b"sumcheck_points", &points);
+            polys.push(points);
+            rs[i - 1] = r;
+        }
+        let r = transcript.challenge_scalar(b"sumcheck_challenge");
+        rs[rounds - 1] = r;
+        let finals = mles.iter().map(|mle| set_variable(mle, r)[0]).collect();
+        SumcheckProof {
+            polynomials: polys, 
+            final_terms: finals,
+            rands: rs,
+            degree: degree,
+            rounds: rounds,
+            claim: claim
+        }
+    }
+
+    pub fn verify(
+        &self,
+        transcript: &mut impl ProtocolTranscript<F>,
+    ) -> (Vec<F>, F) {
+        let mut rs = vec![F::ZERO; self.rounds];
+        transcript.append_scalar(b"sumcheck_claim", &self.claim);
+        transcript.append_scalar(b"sumcheck_degree", &F::from(self.degree as u64));
+        transcript.append_scalar(b"sumcheck_rounds", &F::from(self.rounds as u64));
+        transcript.append_points(b"sumcheck_points", &self.polynomials[0]);
+        assert_eq!(self.claim, self.polynomials[0][0] + self.polynomials[0][1]);
+        for i in 1..self.polynomials.len() {
+            let r = transcript.challenge_scalar(b"sumcheck_challenge");
+            assert_eq!(self.polynomials[i].len(), self.degree + 1);
+            assert_eq!(
+                eval_ule(&self.polynomials[i - 1], r),
+                self.polynomials[i][0] + self.polynomials[i][1]
+            );
+            rs[i - 1] = r;
+            transcript.append_points(b"sumcheck_points", &self.polynomials[i]);
+        }
+        if self.rounds == 0 {
+            (rs, self.claim)
+        } else {
+            let r = transcript.challenge_scalar(b"sumcheck_challenge");
+            let final_eval = eval_ule(&self.polynomials[self.rounds - 1], r);
+            rs[self.rounds - 1] = r;
+            (rs, final_eval)
+        }
+    }
+
+}
+
 pub fn prove<F: PrimeField + From<i32>>(
     claim: F,
     mut mles: Vec<Vec<F>>,
     transcript: &mut impl ProtocolTranscript<F>,
-) -> (Vec<Vec<F>>, Vec<F>) {
+) -> (Vec<Vec<F>>, Vec<F>, Vec<F>) {
     transcript.append_scalar(b"sumcheck_claim", &claim);
     let degree = mles.len();
     transcript.append_scalar(b"sumcheck_degree", &F::from(degree as u64));
@@ -67,7 +149,8 @@ pub fn prove<F: PrimeField + From<i32>>(
     }
     let r = transcript.challenge_scalar(b"sumcheck_challenge");
     rs[rounds - 1] = r;
-    (polys, rs)
+    let finals = mles.iter().map(|mle| set_variable(mle, r)[0]).collect();
+    (polys, rs, finals)
 }
 
 pub fn verify<F: PrimeField + From<i32>>(
@@ -133,7 +216,7 @@ fn quadratic() {
 
     let mut transcript = Transcript::new(b"test_transcript");
 
-    let (polys, rs) = prove(claim, mles, &mut transcript);
+    let (polys, rs, _) = prove(claim, mles, &mut transcript);
 
     let mut verify_transcript = Transcript::new(b"test_transcript");
     let (vrs, expected_eval) = verify(claim, polys.clone(), 2, polys.len(), &mut verify_transcript);
@@ -182,7 +265,7 @@ fn cubic() {
     let claim: Fr = izip!(&a, &b, &c).map(|(&a, &b, &c)| a * b * c).sum();
     let mles = vec![a.clone(), b.clone(), c.clone()];
     let mut transcript = Transcript::new(b"test_transcript");
-    let (polys, _rs) = prove(claim, mles, &mut transcript);
+    let (polys, _rs, _) = prove(claim, mles, &mut transcript);
 
     let mut verify_transcript = Transcript::new(b"test_transcript");
     let (vrs, expected_eval) = verify(claim, polys.clone(), 3, polys.len(), &mut verify_transcript);

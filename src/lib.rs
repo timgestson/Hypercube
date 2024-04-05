@@ -1,6 +1,6 @@
 mod fiatshamir;
 mod grandproduct;
-mod linearsumcheck;
+mod sumcheck;
 mod matmul;
 mod multilinear;
 mod spark;

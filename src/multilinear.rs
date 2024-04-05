@@ -23,3 +23,9 @@ pub fn eval_chis<F: PrimeField>(chis: &[F], evals: &[F]) -> F {
 pub fn eval_mle<F: PrimeField>(point: &[F], evals: &[F]) -> F {
     eval_chis(&chis(point), evals)
 }
+
+pub fn pad_next_power_of_two<F: PrimeField>(terms: &[F]) -> Vec<F> {
+    let next = terms.len().next_power_of_two();
+    let pad = vec![F::ZERO; next - terms.len()];
+    terms.iter().cloned().chain(pad).collect()
+}

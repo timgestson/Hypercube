@@ -29,6 +29,7 @@ fn derive_points<F: PrimeField>(mles: &[Vec<F>], last_claim: F) -> Vec<F> {
     points
 }
 
+#[derive(Clone)]
 pub struct SumcheckProof<F: PrimeField + From<i32>> {
     pub polynomials: Vec<Vec<F>>,
     pub rands: Vec<F>,

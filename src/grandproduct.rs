@@ -68,17 +68,17 @@ impl<F: PrimeField + From<i32>> GrandProductProof<F> {
             let sumcheck_proof =
                 SumcheckProof::prove(claim, vec![eq.clone(), l.clone(), r.clone()], transcript);
             rands = sumcheck_proof.rands.clone();
-            sumcheck_proofs.push(sumcheck_proof);
-            // TODO: Return from Sumcheck instead of recalculating
-            let left = eval_mle(&rands, &l);
-            let right = eval_mle(&rands, &r);
-            left_evals.push(left);
-            right_evals.push(right);
-            transcript.append_scalar(b"grand_product_point", &left);
-            transcript.append_scalar(b"grand_product_point", &right);
+            sumcheck_proofs.push(sumcheck_proof.clone());
+            left_evals.push(sumcheck_proof.final_terms[1].clone());
+            right_evals.push(sumcheck_proof.final_terms[2].clone());
+            transcript.append_scalar(b"grand_product_point", &sumcheck_proof.final_terms[1]);
+            transcript.append_scalar(b"grand_product_point", &sumcheck_proof.final_terms[2]);
             let challenge = transcript.challenge_scalar(b"grand_product_challenge");
             rands.push(challenge);
-            claim = eval_ule(&[left, right], challenge);
+            claim = eval_ule(
+                &[sumcheck_proof.final_terms[1], sumcheck_proof.final_terms[2]],
+                challenge,
+            );
             claims.push(claim);
             z = rands;
         }
